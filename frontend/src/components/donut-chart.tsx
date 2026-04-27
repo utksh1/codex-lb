@@ -183,8 +183,10 @@ export function DonutChart({ items, total, centerValue, title, subtitle, safeLin
                 isAnimationActive={!reducedMotion}
                 animationDuration={600}
                 animationEasing="ease-out"
-                onMouseEnter={(data) => {
-                  if (typeof data?.id === "string") {
+                onMouseEnter={(data: any) => {
+                  if (data && typeof data.payload?.id === "string") {
+                    setActiveLegendId(data.payload.id);
+                  } else if (data && typeof data.id === "string") {
                     setActiveLegendId(data.id);
                   }
                 }}
