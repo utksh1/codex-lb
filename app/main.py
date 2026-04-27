@@ -387,26 +387,27 @@ def create_app() -> FastAPI:
         last_segment = path.rsplit("/", maxsplit=1)[-1]
         return "." in last_segment
 
-    @app.get("/", include_in_schema=False)
-    @app.get("/{path:path}", include_in_schema=False)
-    async def spa_fallback(path: str = ""):
-        normalized = path.lstrip("/")
-        if normalized and any(
-            normalized == prefix.rstrip("/") or normalized.startswith(prefix) for prefix in excluded_prefixes
-        ):
-            raise HTTPException(status_code=404, detail="Not Found")
-
-        if normalized:
-            candidate = (static_dir / normalized).resolve()
-            if candidate.is_relative_to(static_root) and candidate.is_file():
-                return FileResponse(candidate)
-            if _is_static_asset_path(normalized):
+    if os.getenv("CODEX_LB_FRONTEND_ENABLED", "true").lower() == "true":
+        @app.get("/", include_in_schema=False)
+        @app.get("/{path:path}", include_in_schema=False)
+        async def spa_fallback(path: str = ""):
+            normalized = path.lstrip("/")
+            if normalized and any(
+                normalized == prefix.rstrip("/") or normalized.startswith(prefix) for prefix in excluded_prefixes
+            ):
                 raise HTTPException(status_code=404, detail="Not Found")
 
-        if not index_html.is_file():
-            raise HTTPException(status_code=503, detail=frontend_build_hint)
+            if normalized:
+                candidate = (static_dir / normalized).resolve()
+                if candidate.is_relative_to(static_root) and candidate.is_file():
+                    return FileResponse(candidate)
+                if _is_static_asset_path(normalized):
+                    raise HTTPException(status_code=404, detail="Not Found")
 
-        return FileResponse(index_html, media_type="text/html")
+            if not index_html.is_file():
+                raise HTTPException(status_code=503, detail=frontend_build_hint)
+
+            return FileResponse(index_html, media_type="text/html")
 
     return app
 
