@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codex Chat | Futuristic Assistant</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <div class="logo-section">
+                <img src="avatar.png" alt="AI Avatar">
+                <h1>Codex Chat</h1>
+            </div>
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span>Connected to codex-lb</span>
+            </div>
+        </header>
+
+        <main id="chat-window">
+            <div class="message ai">
+                <div class="message-info">Codex • Just now</div>
+                Hello! I am your AI assistant, powered by Codex-LB. How can I help you today?
+            </div>
+        </main>
+
+        <div id="input-area">
+            <div class="input-wrapper">
+                <textarea id="chat-input" placeholder="Type a message..." rows="1"></textarea>
+                <button id="send-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = 'sk-clb-iqezf7R-0dkLkETdIz1F3ZvR8fR3LNNLmnaBvgWbnCQ';
+        const BASE_URL = 'http://127.0.0.1:2455/v1';
+
+        const chatWindow = document.getElementById('chat-window');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        // Auto-resize textarea
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        async function sendMessage() {
+            const content = chatInput.value.trim();
+            if (!content) return;
+
+            // Clear input
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+
+            // Add user message to UI
+            appendMessage('user', content);
+
+            // Add typing indicator
+            const typingId = showTypingIndicator();
+
+            try {
+                const response = await fetch(`${BASE_URL}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-5.4',
+                        messages: [{ role: 'user', content: content }]
+                    })
+                });
+
+                const data = await response.json();
+                removeTypingIndicator(typingId);
+
+                if (data.choices && data.choices[0]) {
+                    const aiContent = data.choices[0].message.content;
+                    appendMessage('ai', aiContent);
+                } else if (data.error && data.error.message) {
+                    appendMessage('ai', `Error: ${data.error.message}`);
+                } else {
+                    appendMessage('ai', 'Error: Invalid response from server.');
+                }
+            } catch (error) {
+                removeTypingIndicator(typingId);
+                appendMessage('ai', 'Error: Could not connect to the backend. Make sure codex-lb is running on port 2455.');
+                console.error(error);
+            }
+        }
+
+        function appendMessage(role, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const sender = role === 'ai' ? 'Codex' : 'You';
+            
+            msgDiv.innerHTML = `
+                <div class="message-info">${sender} • ${time}</div>
+                <div class="content">${formatText(text)}</div>
+            `;
+            
+            chatWindow.appendChild(msgDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        function formatText(text) {
+            // Simple markdown-ish formatting
+            return text
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>');
+        }
+
+        function showTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const indicator = document.createElement('div');
+            indicator.id = id;
+            indicator.className = 'typing-indicator';
+            indicator.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+            chatWindow.appendChild(indicator);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

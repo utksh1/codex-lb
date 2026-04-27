@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.core.bootstrap import ensure_auto_bootstrap_token, log_bootstrap_token
@@ -320,6 +321,13 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(cast(Any, InFlightMiddleware))
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     add_dashboard_auth_proxy_middleware(app)
     add_request_decompression_middleware(app)
     add_request_id_middleware(app)
