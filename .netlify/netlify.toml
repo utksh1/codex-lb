@@ -1,0 +1,56 @@
+functionsDirectory = "/Users/Utkarsh/Desktop/Projects/codex-lb/frontend/netlify/functions"
+functionsDirectoryOrigin = "ui"
+redirectsOrigin = "config"
+plugins = []
+headers = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "/Users/Utkarsh/Desktop/Projects/codex-lb/app/static"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "npm run build"
+base = "/Users/Utkarsh/Desktop/Projects/codex-lb/frontend"
+functions = "/Users/Utkarsh/Desktop/Projects/codex-lb/frontend/netlify/functions"
+
+[build.environment]
+NODE_VERSION = "20"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[[redirects]]
+from = "/api/*"
+to = "https://codex-lb-backend.onrender.com/api/:splat"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
