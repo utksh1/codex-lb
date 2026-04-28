@@ -9,7 +9,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_settings_multi_replica_defaults():
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.metrics_enabled is False
     assert settings.metrics_port == 9090
     assert settings.log_format == "text"
@@ -41,6 +41,26 @@ def test_settings_metrics_enabled_from_env(monkeypatch):
     monkeypatch.setenv("CODEX_LB_METRICS_ENABLED", "true")
     settings = Settings()
     assert settings.metrics_enabled is True
+
+
+def test_settings_postgres_uses_deploy_safe_pool_defaults(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_DATABASE_URL", "postgresql+asyncpg://codex_lb:codex_lb@127.0.0.1:5432/codex_lb")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_pool_size == 3
+    assert settings.database_max_overflow == 0
+
+
+def test_settings_postgres_respects_explicit_pool_overrides(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_DATABASE_URL", "postgresql+asyncpg://codex_lb:codex_lb@127.0.0.1:5432/codex_lb")
+    monkeypatch.setenv("CODEX_LB_DATABASE_POOL_SIZE", "9")
+    monkeypatch.setenv("CODEX_LB_DATABASE_MAX_OVERFLOW", "4")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_pool_size == 9
+    assert settings.database_max_overflow == 4
 
 
 def test_settings_metrics_port_from_env(monkeypatch):

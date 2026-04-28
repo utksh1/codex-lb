@@ -18,6 +18,7 @@ from anyio import to_thread
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.engine import Connection
+from sqlalchemy.pool import NullPool
 
 from app.core.config.settings import get_settings
 from app.db.alembic.revision_ids import LEGACY_MIGRATION_TO_NEW_REVISION, OLD_TO_NEW_REVISION_MAP, REVISION_ID_PATTERN
@@ -126,9 +127,15 @@ def _required_sqlalchemy_url(config: Config) -> str:
     return sync_database_url
 
 
+def _sync_engine_kwargs(sync_database_url: str) -> dict[str, object]:
+    if sync_database_url.startswith("postgresql"):
+        return {"poolclass": NullPool}
+    return {}
+
+
 @contextmanager
 def _sync_connection(sync_database_url: str) -> Iterator[Connection]:
-    engine = create_engine(sync_database_url, future=True)
+    engine = create_engine(sync_database_url, future=True, **_sync_engine_kwargs(sync_database_url))
     try:
         with engine.connect() as connection:
             yield connection
@@ -138,7 +145,7 @@ def _sync_connection(sync_database_url: str) -> Iterator[Connection]:
 
 @contextmanager
 def _sync_transaction(sync_database_url: str) -> Iterator[Connection]:
-    engine = create_engine(sync_database_url, future=True)
+    engine = create_engine(sync_database_url, future=True, **_sync_engine_kwargs(sync_database_url))
     try:
         with engine.begin() as connection:
             yield connection

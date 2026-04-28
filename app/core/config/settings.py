@@ -19,6 +19,10 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 
 DOCKER_DATA_DIR = Path("/var/lib/codex-lb")
 DOCKER_CALLBACK_HOST = "0.0.0.0"
+DEFAULT_DATABASE_POOL_SIZE = 15
+DEFAULT_DATABASE_MAX_OVERFLOW = 10
+POSTGRES_DEPLOY_SAFE_DATABASE_POOL_SIZE = 3
+POSTGRES_DEPLOY_SAFE_DATABASE_MAX_OVERFLOW = 0
 
 
 def _in_container() -> bool:
@@ -84,6 +88,10 @@ def _configured_http_port() -> int:
     return 2455
 
 
+def _database_url_uses_postgres(url: str) -> bool:
+    return url.startswith("postgresql")
+
+
 def _normalize_cidr_list(value: StringListInput, *, field_name: str, invalid_label: str) -> list[str]:
     if value is None:
         return []
@@ -118,8 +126,8 @@ class Settings(BaseSettings):
     )
 
     database_url: str = f"sqlite+aiosqlite:///{DEFAULT_DB_PATH}"
-    database_pool_size: int = Field(default=15, gt=0)
-    database_max_overflow: int = Field(default=10, ge=0)
+    database_pool_size: int = Field(default=DEFAULT_DATABASE_POOL_SIZE, gt=0)
+    database_max_overflow: int = Field(default=DEFAULT_DATABASE_MAX_OVERFLOW, ge=0)
     database_pool_timeout_seconds: float = Field(default=30.0, gt=0)
     database_migrate_on_startup: bool = True
     database_sqlite_pre_migrate_backup_enabled: bool = True
@@ -412,6 +420,16 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "http_responses_session_bridge_advertise_base_url must be replica-specific for bridge routing"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _apply_postgres_deploy_safe_pool_defaults(self) -> "Settings":
+        if not _database_url_uses_postgres(self.database_url):
+            return self
+        if "database_pool_size" not in self.model_fields_set and self.database_pool_size == DEFAULT_DATABASE_POOL_SIZE:
+            self.database_pool_size = POSTGRES_DEPLOY_SAFE_DATABASE_POOL_SIZE
+        if "database_max_overflow" not in self.model_fields_set and self.database_max_overflow == DEFAULT_DATABASE_MAX_OVERFLOW:
+            self.database_max_overflow = POSTGRES_DEPLOY_SAFE_DATABASE_MAX_OVERFLOW
         return self
 
     @model_validator(mode="after")

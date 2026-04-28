@@ -22,6 +22,7 @@ from app.db.migrate import (
     _ensure_alembic_version_table_capacity_for_connection,
     _max_revision_id_length,
     _read_current_revisions_from_connection,
+    _sync_engine_kwargs,
     check_migration_policy,
     check_schema_drift,
     inspect_migration_state,
@@ -31,11 +32,24 @@ from app.db.migrate import (
 )
 from app.db.migration_url import to_sync_database_url
 from app.db.models import Base
+from sqlalchemy.pool import NullPool
 from app.modules.usage.additional_quota_keys import clear_additional_quota_registry_cache
 
 
 def _db_url(path: Path) -> str:
     return f"sqlite+aiosqlite:///{path}"
+
+
+def test_sync_engine_kwargs_use_null_pool_for_postgres() -> None:
+    kwargs = _sync_engine_kwargs("postgresql+psycopg://user:pass@localhost/db")
+
+    assert kwargs == {"poolclass": NullPool}
+
+
+def test_sync_engine_kwargs_leave_sqlite_unpooled_override_disabled() -> None:
+    kwargs = _sync_engine_kwargs("sqlite:///tmp/test.db")
+
+    assert kwargs == {}
 
 
 def test_check_schema_drift_disposes_sync_engine(monkeypatch) -> None:
