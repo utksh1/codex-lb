@@ -153,3 +153,17 @@ async def health_startup() -> HealthCheckResponse:
     if startup_module._startup_complete:
         return HealthCheckResponse(status="ok")
     raise HTTPException(status_code=503, detail="Service is starting")
+
+
+@router.get("/health/upstream")
+async def health_upstream():
+    settings = get_settings()
+    upstream_base = settings.upstream_base_url.rstrip("/")
+    is_openai = "api.utksh.in" in upstream_base or "api.openai.com" in upstream_base or "localhost" in upstream_base
+    
+    return {
+        "status": "ok",
+        "upstream_url": upstream_base,
+        "is_openai_compatible": is_openai,
+        "anthropic_compatibility": True
+    }

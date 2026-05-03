@@ -98,8 +98,13 @@ async def fetch_models_for_plan(
 ) -> list[UpstreamModel]:
     settings = get_settings()
     upstream_base = settings.upstream_base_url.rstrip("/")
-    client_version = await get_codex_version_cache().get_version()
-    url = f"{upstream_base}/codex/models?client_version={client_version}"
+    is_openai = "api.utksh.in" in upstream_base or "api.openai.com" in upstream_base or "localhost" in upstream_base
+    
+    if is_openai:
+        url = f"{upstream_base}/v1/models"
+    else:
+        client_version = await get_codex_version_cache().get_version()
+        url = f"{upstream_base}/codex/models?client_version={client_version}"
 
     headers: dict[str, str] = {
         "Authorization": f"Bearer {access_token}",
@@ -121,21 +126,59 @@ async def fetch_models_for_plan(
     if not isinstance(data, dict):
         raise ModelFetchError(502, "Invalid response format from upstream models API")
 
-    models_raw = data.get("models")
-    if not isinstance(models_raw, list):
-        raise ModelFetchError(502, "Missing 'models' key in upstream response")
-
     result: list[UpstreamModel] = []
-    for entry in models_raw:
-        if not isinstance(entry, dict):
-            continue
-        slug = entry.get("slug")
-        if not isinstance(slug, str) or not slug:
-            continue
-        try:
-            result.append(_parse_upstream_model(entry))
-        except Exception:
-            logger.warning("Failed to parse upstream model entry slug=%s", slug, exc_info=True)
-            continue
+    
+    if is_openai:
+        # Standard OpenAI format: {"data": [{"id": "...", ...}]}
+        models_data = data.get("data")
+        if not isinstance(models_data, list):
+            raise ModelFetchError(502, "Missing 'data' key in OpenAI models response")
+        
+        for entry in models_data:
+            if not isinstance(entry, dict):
+                continue
+            id_val = entry.get("id")
+            if not isinstance(id_val, str) or not id_val:
+                continue
+            
+            # Map OpenAI model to internal UpstreamModel
+            result.append(
+                UpstreamModel(
+                    slug=id_val,
+                    display_name=id_val,
+                    description=f"OpenAI model {id_val}",
+                    context_window=128000,  # Default for modern models
+                    input_modalities=("text",),
+                    supported_reasoning_levels=(),
+                    default_reasoning_level=None,
+                    supports_reasoning_summaries=False,
+                    support_verbosity=False,
+                    default_verbosity=None,
+                    prefer_websockets=False,
+                    supports_parallel_tool_calls=True,
+                    supported_in_api=True,
+                    minimal_client_version=None,
+                    priority=0,
+                    available_in_plans=frozenset(["pro", "plus", "team", "enterprise"]),
+                    raw=entry,
+                )
+            )
+    else:
+        # Internal format: {"models": [{"slug": "...", ...}]}
+        models_raw = data.get("models")
+        if not isinstance(models_raw, list):
+            raise ModelFetchError(502, "Missing 'models' key in upstream response")
+
+        for entry in models_raw:
+            if not isinstance(entry, dict):
+                continue
+            slug = entry.get("slug")
+            if not isinstance(slug, str) or not slug:
+                continue
+            try:
+                result.append(_parse_upstream_model(entry))
+            except Exception:
+                logger.warning("Failed to parse upstream model entry slug=%s", slug, exc_info=True)
+                continue
 
     return result
