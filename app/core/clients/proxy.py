@@ -113,6 +113,139 @@ _UPSTREAM_TRACE_HEADER_ALLOWLIST = frozenset(
         "x-request-id",
     }
 )
+
+
+def _is_openai_compatible_upstream(url: str) -> bool:
+    """Return True if the upstream URL likely speaks OpenAI protocol."""
+    return "api.utksh.in" in url or "api.openai.com" in url or "localhost" in url
+
+
+def _responses_to_openai_payload(payload: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """Translate internal Responses request payload to OpenAI Chat Completions payload."""
+    openai_payload = dict(payload)
+    instructions = openai_payload.pop("instructions", None)
+    input_items = openai_payload.pop("input", None)
+    
+    messages = []
+    if isinstance(instructions, str) and instructions:
+        messages.append({"role": "system", "content": instructions})
+    
+    if isinstance(input_items, list):
+        for item in input_items:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            content = item.get("content")
+            
+            if role in ("user", "assistant"):
+                openai_content = []
+                if isinstance(content, list):
+                    for part in content:
+                        if not isinstance(part, dict):
+                            continue
+                        part_type = part.get("type")
+                        if part_type in ("input_text", "output_text"):
+                            openai_content.append({"type": "text", "text": part.get("text")})
+                        elif part_type == "input_image":
+                            openai_content.append({
+                                "type": "image_url",
+                                "image_url": {"url": part.get("image_url"), "detail": part.get("detail")}
+                            })
+                if len(openai_content) == 1 and openai_content[0]["type"] == "text":
+                    messages.append({"role": role, "content": openai_content[0]["text"]})
+                else:
+                    messages.append({"role": role, "content": openai_content})
+            elif item.get("type") == "function_call":
+                messages.append({
+                    "role": "assistant",
+                    "tool_calls": [{
+                        "id": item.get("call_id"),
+                        "type": "function",
+                        "function": {"name": item.get("name"), "arguments": item.get("arguments")}
+                    }]
+                })
+            elif item.get("type") == "function_call_output":
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": item.get("call_id"),
+                    "content": item.get("output")
+                })
+    
+    openai_payload["messages"] = messages
+    
+    # Handle tools
+    tools = openai_payload.pop("tools", None)
+    if isinstance(tools, list):
+        openai_tools = []
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            if tool.get("type") == "function":
+                openai_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": tool.get("name"),
+                        "description": tool.get("description"),
+                        "parameters": tool.get("parameters")
+                    }
+                })
+        if openai_tools:
+            openai_payload["tools"] = openai_tools
+            
+    # Handle tool_choice
+    tool_choice = openai_payload.get("tool_choice")
+    if isinstance(tool_choice, dict) and tool_choice.get("type") == "function":
+        openai_payload["tool_choice"] = {
+            "type": "function",
+            "function": {"name": tool_choice.get("name")}
+        }
+        
+    return openai_payload
+
+
+def _openai_chunk_to_responses_event(line: str) -> str | None:
+    """Translate OpenAI chat chunk SSE line to internal Responses event line."""
+    payload = parse_sse_data_json(line)
+    if payload is None:
+        return None
+    
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    
+    delta = choices[0].get("delta")
+    if not isinstance(delta, dict):
+        return None
+    
+    content = delta.get("content")
+    if isinstance(content, str) and content:
+        return f'data: {json.dumps({"type": "response.output_text.delta", "delta": content}, separators=(",", ":"))}\n\n'
+    
+    # Handle finish reason
+    finish_reason = choices[0].get("finish_reason")
+    if finish_reason:
+        response_id = payload.get("id") or "resp_temp"
+        return f'data: {json.dumps({"type": "response.completed", "response": {"id": response_id}}, separators=(",", ":"))}\n\n'
+    
+    return None
+
+
+def _openai_to_responses_payload(openai_payload: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """Translate OpenAI Chat Completion response to internal Responses payload."""
+    choices = openai_payload.get("choices")
+    content = ""
+    if isinstance(choices, list) and choices:
+        message = choices[0].get("message")
+        if isinstance(message, dict):
+            content = message.get("content") or ""
+            
+    return {
+        "object": "response.compact",
+        "id": openai_payload.get("id"),
+        "status": "completed",
+        "output": [{"type": "output_text", "text": content}],
+        "usage": openai_payload.get("usage")
+    }
 _NATIVE_CODEX_ORIGINATORS = frozenset(
     {
         "Codex Desktop",
@@ -1776,7 +1909,11 @@ async def stream_responses(
 ) -> AsyncIterator[str]:
     settings = get_settings()
     upstream_base = (base_url or settings.upstream_base_url).rstrip("/")
-    url = f"{upstream_base}/codex/responses"
+    is_openai = _is_openai_compatible_upstream(upstream_base)
+    if is_openai:
+        url = f"{upstream_base}/v1/chat/completions"
+    else:
+        url = f"{upstream_base}/codex/responses"
     pre_request_started_at = time.monotonic()
     # Keep a default total timeout so direct callers cannot hang forever before
     # response headers or the first SSE event. ProxyService stream attempts clamp
@@ -1838,7 +1975,7 @@ async def stream_responses(
         async with _service_circuit_breaker_context(
             client_session.post(
                 url,
-                json=payload_dict,
+                json=payload_dict if not is_openai else _responses_to_openai_payload(payload_dict),
                 headers=current_headers,
                 timeout=current_timeout,
             ),
@@ -1861,7 +1998,13 @@ async def stream_responses(
                 effective_idle_timeout,
                 settings.max_sse_event_bytes,
             ):
-                event_block = _normalize_sse_event_block(event_block)
+                if is_openai:
+                    event_block = _openai_chunk_to_responses_event(event_block)
+                    if not event_block:
+                        continue
+                else:
+                    event_block = _normalize_sse_event_block(event_block)
+
                 event = parse_sse_event(event_block)
                 if event:
                     event_type = event.type
@@ -2178,7 +2321,11 @@ class _CompactCommandTransport:
     async def execute(self) -> CompactResponsePayload:
         settings = get_settings()
         upstream_base = settings.upstream_base_url.rstrip("/")
-        url = f"{upstream_base}/codex/responses/compact"
+        is_openai = _is_openai_compatible_upstream(upstream_base)
+        if is_openai:
+            url = f"{upstream_base}/v1/chat/completions"
+        else:
+            url = f"{upstream_base}/codex/responses/compact"
         upstream_headers = _build_upstream_headers(
             self.headers,
             self.access_token,
@@ -2238,7 +2385,7 @@ class _CompactCommandTransport:
             async with _service_circuit_breaker_context(
                 self.session.post(
                     url,
-                    json=payload_dict,
+                    json=payload_dict if not is_openai else _responses_to_openai_payload(payload_dict),
                     headers=upstream_headers,
                     timeout=timeout,
                 ),
@@ -2262,6 +2409,8 @@ class _CompactCommandTransport:
                     )
                 try:
                     data = await resp.json(content_type=None)
+                    if is_openai and isinstance(data, dict):
+                        data = _openai_to_responses_payload(data)
                 except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                     message = str(exc) or "Request to upstream timed out"
                     error_code = "upstream_unavailable"

@@ -149,6 +149,9 @@ class ChatCompletionsRequest(BaseModel):
             data["tool_choice"] = tool_choice
         return ResponsesRequest.model_validate(data)
 
+    def to_payload(self) -> dict[str, JsonValue]:
+        return self.model_dump(mode="json", exclude_none=True)
+
 
 class ChatResponseFormatJsonSchema(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)

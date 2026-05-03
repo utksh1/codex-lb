@@ -93,6 +93,12 @@ from app.modules.proxy.types import (
     RateLimitWindowSnapshotData,
 )
 from app.modules.usage.repository import UsageRepository
+from app.core.anthropic.models import AnthropicMessagesRequest, AnthropicMessagesResponse
+from app.core.anthropic.translation import (
+    anthropic_to_openai_request,
+    openai_to_anthropic_response,
+    stream_openai_to_anthropic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1411,6 +1417,91 @@ async def v1_chat_completions(
         )
     return JSONResponse(
         content=result.model_dump(mode="json", exclude_none=True),
+        status_code=200,
+        headers=rate_limit_headers,
+    )
+
+
+@v1_router.post(
+    "/messages",
+    response_model=AnthropicMessagesResponse,
+)
+async def v1_messages(
+    request: Request,
+    payload: AnthropicMessagesRequest = Body(...),
+    context: ProxyContext = Depends(get_proxy_context),
+    api_key: ApiKeyData | None = Security(validate_proxy_api_key),
+) -> Response:
+    effective_model = _effective_model_for_api_key(api_key, payload.model)
+    validate_model_access(api_key, effective_model)
+
+    rate_limit_headers = await context.service.rate_limit_headers()
+    openai_request = anthropic_to_openai_request(payload)
+    
+    try:
+        responses_payload = openai_request.to_responses_request()
+        enforce_strict_text_format(responses_payload)
+    except ClientPayloadError as exc:
+        error = openai_client_payload_error(exc)
+        return _logged_error_json_response(request, 400, error, headers=rate_limit_headers)
+    except ValidationError as exc:
+        error = openai_validation_error(exc)
+        return _logged_error_json_response(request, 400, error, headers=rate_limit_headers)
+        
+    reservation = await _enforce_request_limits(
+        api_key,
+        request_model=effective_model,
+        request_service_tier=responses_payload.service_tier,
+    )
+    responses_payload.stream = True
+    apply_api_key_enforcement(responses_payload, api_key)
+    
+    stream = context.service.stream_responses(
+        responses_payload,
+        request.headers,
+        codex_session_affinity=False,
+        propagate_http_errors=True,
+        openai_cache_affinity=True,
+        api_key=api_key,
+        api_key_reservation=reservation,
+        suppress_text_done_events=True,
+    )
+    
+    try:
+        first = await stream.__anext__()
+    except StopAsyncIteration:
+        first = None
+    except ProxyResponseError as exc:
+        return _logged_error_json_response(request, exc.status_code, exc.payload, headers=rate_limit_headers)
+
+    stream_with_first = _prepend_first(first, stream)
+    
+    # Internal stream is always Responses format.
+    # Convert it to OpenAI chunks first (since our anthropic translation expects OpenAI chunks)
+    openai_chunks = stream_chat_chunks(stream_with_first, model=responses_payload.model)
+
+    if payload.stream:
+        return StreamingResponse(
+            stream_openai_to_anthropic(openai_chunks),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", **rate_limit_headers},
+        )
+
+    result = await collect_chat_completion(stream_with_first, model=responses_payload.model)
+    if isinstance(result, OpenAIErrorEnvelopeModel):
+        error = result.error
+        code = error.code if error else None
+        status_code = 503 if code in _UNAVAILABLE_SELECTION_ERROR_CODES else 502
+        return _logged_error_json_response(
+            request,
+            status_code,
+            content=result.model_dump(mode="json", exclude_none=True),
+            headers=rate_limit_headers,
+        )
+
+    anthropic_result = openai_to_anthropic_response(result)
+    return JSONResponse(
+        content=anthropic_result.model_dump(mode="json", exclude_none=True),
         status_code=200,
         headers=rate_limit_headers,
     )
