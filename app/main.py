@@ -313,10 +313,28 @@ def create_app() -> FastAPI:
         warning_threshold_mb=settings.memory_warning_threshold_mb,
         reject_threshold_mb=settings.memory_reject_threshold_mb,
     )
+
+    tags_metadata = [
+        {
+            "name": "proxy",
+            "description": "Core proxy endpoints for OpenAI and Anthropic protocol compatibility.",
+        },
+        {
+            "name": "health",
+            "description": "System health and upstream connectivity status.",
+        },
+        {
+            "name": "accounts",
+            "description": "Manage model provider accounts and quotas.",
+        },
+    ]
+
     app = FastAPI(
-        title="codex-lb",
+        title="Codex LB",
+        description="High-performance, protocol-aware LLM load balancer and proxy.",
         version="0.1.0",
         lifespan=lifespan,
+        openapi_tags=tags_metadata,
         swagger_ui_parameters={"persistAuthorization": True},
     )
 
