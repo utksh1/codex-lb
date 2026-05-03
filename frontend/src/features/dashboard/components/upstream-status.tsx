@@ -8,7 +8,7 @@ export function UpstreamStatus() {
   const { data, isLoading } = useQuery({
     queryKey: ["health", "upstream"],
     queryFn: async () => {
-      const resp = await fetch("/api/health/upstream");
+      const resp = await fetch("/health/upstream");
       if (!resp.ok) throw new Error("Failed to fetch upstream status");
       return resp.json();
     },

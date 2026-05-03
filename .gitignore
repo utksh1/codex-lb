@@ -40,6 +40,9 @@ frontend/coverage/
 .local/
 .worktrees/
 certs/
+local.db
+local.db-shm
+local.db-wal
 
 .codex-lb/
 .sisyphus/

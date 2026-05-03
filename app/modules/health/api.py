@@ -15,7 +15,9 @@ from app.db.session import get_session
 from app.modules.health.schemas import BridgeRingInfo, HealthCheckResponse, HealthResponse
 from app.modules.proxy.ring_membership import RING_STALE_THRESHOLD_SECONDS
 
-router = APIRouter(prefix="/api", tags=["health"])
+# Health endpoints are exposed at the root (/health/*) so infra health checks
+# (Render/Railway/K8s) can probe them without any dashboard /api prefix.
+router = APIRouter(tags=["health"])
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -155,7 +157,7 @@ async def health_startup() -> HealthCheckResponse:
     raise HTTPException(status_code=503, detail="Service is starting")
 
 
-@router.get("/health/upstream")
+@router.get("/api/health/upstream")
 async def health_upstream():
     settings = get_settings()
     upstream_base = settings.upstream_base_url.rstrip("/")
