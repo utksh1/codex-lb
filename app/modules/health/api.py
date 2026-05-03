@@ -157,7 +157,7 @@ async def health_startup() -> HealthCheckResponse:
     raise HTTPException(status_code=503, detail="Service is starting")
 
 
-@router.get("/api/health/upstream")
+@router.get("/health/upstream")
 async def health_upstream():
     settings = get_settings()
     upstream_base = settings.upstream_base_url.rstrip("/")
