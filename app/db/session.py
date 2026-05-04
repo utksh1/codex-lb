@@ -41,8 +41,10 @@ def _is_sqlite_memory_url(url: str) -> bool:
 def _postgres_async_connect_args(url: str) -> dict[str, int] | None:
     if not url.startswith("postgresql+asyncpg://"):
         return None
-    if not os.environ.get("CODEX_LB_TEST_DATABASE_URL"):
-        return None
+    # asyncpg's prepared statement cache can break behind certain connection
+    # poolers (e.g., transaction pooling) and surface as:
+    # DuplicatePreparedStatementError: prepared statement "__asyncpg_stmt_N__" already exists
+    # Disabling the cache is the safest default for production deployments.
     return {"prepared_statement_cache_size": 0}
 
 
