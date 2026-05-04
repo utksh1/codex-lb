@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from hashlib import sha256
 
@@ -18,6 +19,8 @@ from app.modules.proxy.ring_membership import RING_STALE_THRESHOLD_SECONDS
 # Health endpoints are exposed at the root (/health/*) so infra health checks
 # (Render/Railway/K8s) can probe them without any dashboard /api prefix.
 router = APIRouter(tags=["health"])
+
+_HEALTH_READY_DB_TIMEOUT_SECONDS = 2.0
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -46,21 +49,24 @@ async def health_ready() -> HealthCheckResponse:
     try:
         async for session in get_session():
             try:
-                await session.execute(text("SELECT 1"))
-                checks = {"database": "ok"}
-                status = "ok"
+                async with asyncio.timeout(_HEALTH_READY_DB_TIMEOUT_SECONDS):
+                    await session.execute(text("SELECT 1"))
+                    bridge_ring = await _get_bridge_ring_info(session)
 
                 # Upstream health (degradation flag, circuit breaker) is NOT
                 # checked here — only infrastructure readiness matters.
                 # Mixing upstream state into readiness causes permanent
                 # pod eviction after transient upstream failures.
-
-                bridge_ring = await _get_bridge_ring_info(session)
                 failure_detail = _bridge_readiness_failure_detail(bridge_ring)
                 if failure_detail is not None:
                     raise HTTPException(status_code=503, detail=failure_detail)
 
-                return HealthCheckResponse(status=status, checks=checks, bridge_ring=bridge_ring)
+                return HealthCheckResponse(status="ok", checks={"database": "ok"}, bridge_ring=bridge_ring)
+            except TimeoutError:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Service unavailable",
+                )
             except HTTPException:
                 raise
             except Exception:

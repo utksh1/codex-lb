@@ -100,6 +100,29 @@ async def test_health_ready_db_error():
 
 
 @pytest.mark.asyncio
+async def test_health_ready_db_timeout_returns_503():
+    from app.modules.health.api import health_ready
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(side_effect=TimeoutError())
+
+    with (
+        patch("app.core.startup._bridge_durable_schema_ready", True),
+        patch("app.core.startup._bridge_registration_complete", True),
+        patch("app.modules.health.api.get_session") as mock_get_session,
+    ):
+
+        async def mock_get_session_context():
+            yield mock_session
+
+        mock_get_session.return_value = mock_get_session_context()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await health_ready()
+        assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
 async def test_health_ready_draining():
     from app.modules.health.api import health_ready
 
