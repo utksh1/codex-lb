@@ -45,7 +45,10 @@ def _postgres_async_connect_args(url: str) -> dict[str, int] | None:
     # poolers (e.g., transaction pooling) and surface as:
     # DuplicatePreparedStatementError: prepared statement "__asyncpg_stmt_N__" already exists
     # Disabling the cache is the safest default for production deployments.
-    return {"prepared_statement_cache_size": 0}
+    # Disable both SQLAlchemy's asyncpg prepared statement cache and asyncpg's
+    # own statement cache. This avoids PgBouncer transaction-pooling failures
+    # like DuplicatePreparedStatementError / ProtocolViolationError.
+    return {"prepared_statement_cache_size": 0, "statement_cache_size": 0}
 
 
 def _postgres_async_engine_kwargs(url: str, *, background: bool) -> dict[str, object]:

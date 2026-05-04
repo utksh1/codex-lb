@@ -8,6 +8,6 @@ def test_postgres_async_connect_args_disables_prepared_statement_cache() -> None
 
     assert _postgres_async_connect_args("sqlite+aiosqlite:///./local.db") is None
     assert _postgres_async_connect_args("postgresql+asyncpg://user:pass@host/db") == {
-        "prepared_statement_cache_size": 0
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
     }
-
