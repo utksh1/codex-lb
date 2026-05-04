@@ -10,5 +10,4 @@
 
 ## 3. Verification
 
-- [ ] Render deploy succeeds on `codex-lb-backend` and the service starts cleanly.
-
+- [x] Render deploy succeeds on `codex-lb-backend` and the service starts cleanly.
