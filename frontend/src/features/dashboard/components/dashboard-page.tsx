@@ -11,7 +11,7 @@ import { OverviewTimeframeSelect } from "@/features/dashboard/components/filters
 import { RequestFilters } from "@/features/dashboard/components/filters/request-filters";
 import { RecentRequestsTable } from "@/features/dashboard/components/recent-requests-table";
 import { StatsGrid } from "@/features/dashboard/components/stats-grid";
-import { UpstreamStatus } from "@/features/dashboard/components/upstream-status";
+
 import { UsageDonuts } from "@/features/dashboard/components/usage-donuts";
 import { useDashboard } from "@/features/dashboard/hooks/use-dashboard";
 import { useRequestLogs } from "@/features/dashboard/hooks/use-request-logs";
@@ -170,7 +170,7 @@ export function DashboardPage() {
         <DashboardSkeleton />
       ) : (
         <>
-          <UpstreamStatus />
+
           <StatsGrid stats={view.stats} />
 
             <UsageDonuts
