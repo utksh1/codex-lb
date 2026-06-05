@@ -20,7 +20,7 @@ from app.modules.proxy.ring_membership import RING_STALE_THRESHOLD_SECONDS
 # (Render/Railway/K8s) can probe them without any dashboard /api prefix.
 router = APIRouter(tags=["health"])
 
-_HEALTH_READY_DB_TIMEOUT_SECONDS = 2.0
+_HEALTH_READY_DB_TIMEOUT_SECONDS = 5.0
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -109,23 +109,23 @@ def _bridge_readiness_failure_detail(bridge_ring: BridgeRingInfo) -> str | None:
     settings = get_settings()
     if not getattr(settings, "http_responses_session_bridge_enabled", True):
         return None
+    # On single-instance deployments (no explicit ring configured), tolerate
+    # transient bridge ring failures rather than cascading 503s.  The heartbeat
+    # background task and bridge ring queries can stall under resource pressure
+    # on constrained hosts (e.g. Render free tier with PgBouncer).
+    instance_ring = getattr(settings, "http_responses_session_bridge_instance_ring", [])
+    is_single_instance = not instance_ring
     if not startup_module._bridge_durable_schema_ready:
-        return "Service bridge durable schema is not ready"
+        return None if is_single_instance else "Service bridge durable schema is not ready"
     if not startup_module._bridge_registration_complete:
-        return "Service bridge registration is not complete"
+        return None if is_single_instance else "Service bridge registration is not complete"
     if bridge_ring.error is not None:
-        return "Service bridge ring metadata is unavailable"
+        return None if is_single_instance else "Service bridge ring metadata is unavailable"
     if bridge_ring.ring_size == 0:
         return None
     if bridge_ring.is_member:
         return None
-    # On single-instance deployments (no explicit ring configured), tolerate
-    # brief heartbeat lag rather than failing the health check.  The heartbeat
-    # background task can stall under resource pressure on constrained hosts
-    # (e.g. Render free tier), causing the instance to momentarily appear
-    # non-member of its own ring.
-    instance_ring = getattr(settings, "http_responses_session_bridge_instance_ring", [])
-    if not instance_ring:
+    if is_single_instance:
         return None
     return "Service is not an active bridge ring member"
 
