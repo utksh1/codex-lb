@@ -47,7 +47,7 @@ class FirewallIPCache:
         self._version += 1
 
 
-_firewall_ip_cache = FirewallIPCache(ttl_seconds=2)
+_firewall_ip_cache = FirewallIPCache(ttl_seconds=30)
 
 
 def get_firewall_ip_cache() -> FirewallIPCache:

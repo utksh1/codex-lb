@@ -52,7 +52,7 @@ class ApiKeyCache(Generic[_CacheValueT]):
         self._version += 1
 
 
-_api_key_cache: ApiKeyCache[object] = ApiKeyCache(ttl_seconds=2)
+_api_key_cache: ApiKeyCache[object] = ApiKeyCache(ttl_seconds=30)
 
 
 def get_api_key_cache() -> ApiKeyCache[object]:
