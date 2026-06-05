@@ -72,7 +72,11 @@ class ModelRegistry:
     def plan_types_for_model(self, slug: str) -> frozenset[str] | None:
         if self._snapshot is None:
             return None
-        return self._snapshot.model_plans.get(slug, frozenset())
+        plans = self._snapshot.model_plans.get(slug)
+        # Unknown models (not in registry) should be allowed through —
+        # the OpenAI /v1/models endpoint doesn't list all models available
+        # via the Responses API (e.g. gpt-5.5, gpt-5.2, gpt-5.3).
+        return plans if plans is not None else None
 
     def prefers_websockets(self, slug: str | None) -> bool:
         if not isinstance(slug, str):
