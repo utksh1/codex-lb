@@ -220,7 +220,16 @@ class ModelRegistry:
         if self._snapshot is None:
             model = self._bootstrap_models.get(slug) or self._bootstrap_models.get(normalized_slug)
             return model.available_in_plans if model is not None else None
-        return self._snapshot.model_plans.get(slug) or self._snapshot.model_plans.get(normalized_slug, frozenset())
+        # Check live snapshot first
+        plans = self._snapshot.model_plans.get(slug) or self._snapshot.model_plans.get(normalized_slug)
+        if plans is not None:
+            return plans
+        # Fall back to bootstrap models for models not in the live registry
+        # (e.g. gpt-5.5, gpt-5.3-codex are not returned by /v1/models)
+        bootstrap = self._bootstrap_models.get(slug) or self._bootstrap_models.get(normalized_slug)
+        if bootstrap is not None:
+            return bootstrap.available_in_plans
+        return frozenset()
 
     def prefers_websockets(self, slug: str | None) -> bool:
         if not isinstance(slug, str):

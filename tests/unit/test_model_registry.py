@@ -64,6 +64,17 @@ async def test_plan_types_for_model_returns_empty_for_unknown_after_update():
 
 
 @pytest.mark.asyncio
+async def test_plan_types_for_model_falls_back_to_bootstrap_after_update():
+    registry = ModelRegistry(ttl_seconds=60.0)
+    await registry.update({"plus": [_model("model-a")]})
+    # gpt-5.5 is a bootstrap model but not in the live snapshot
+    result = registry.plan_types_for_model("gpt-5.5")
+    assert result is not None
+    assert "plus" in result
+    assert "pro" in result
+
+
+@pytest.mark.asyncio
 async def test_plan_types_for_model_returns_plans():
     registry = ModelRegistry(ttl_seconds=60.0)
     await registry.update(
