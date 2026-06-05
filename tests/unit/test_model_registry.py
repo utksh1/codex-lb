@@ -39,14 +39,24 @@ async def test_initial_snapshot_is_none():
 
 
 @pytest.mark.asyncio
-async def test_plan_types_for_model_returns_none_when_uninitialized():
+async def test_plan_types_for_model_returns_bootstrap_when_uninitialized():
     registry = ModelRegistry(ttl_seconds=60.0)
-    result = registry.plan_types_for_model("some-model")
+    # Bootstrap models should return their available_in_plans
+    result = registry.plan_types_for_model("gpt-5.5")
+    assert result is not None
+    assert "plus" in result
+    assert "pro" in result
+
+
+@pytest.mark.asyncio
+async def test_plan_types_for_model_returns_none_for_unknown_uninitialized():
+    registry = ModelRegistry(ttl_seconds=60.0)
+    result = registry.plan_types_for_model("totally-unknown-model")
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_plan_types_for_model_returns_empty_for_unknown_model():
+async def test_plan_types_for_model_returns_empty_for_unknown_after_update():
     registry = ModelRegistry(ttl_seconds=60.0)
     await registry.update({"plus": [_model("model-a")]})
     result = registry.plan_types_for_model("unknown-model")
@@ -78,11 +88,12 @@ async def test_prefers_websockets_uses_snapshot_value():
     assert registry.prefers_websockets("unknown-model") is False
 
 
-def test_prefers_websockets_uses_bootstrap_fallback_when_uninitialized():
+def test_prefers_websockets_uses_bootstrap_models_when_uninitialized():
     registry = ModelRegistry(ttl_seconds=60.0)
 
+    assert registry.prefers_websockets("gpt-5.5") is True
     assert registry.prefers_websockets("gpt-5.4") is True
-    assert registry.prefers_websockets("gpt-5.4-2026") is True
+    assert registry.prefers_websockets("gpt-5.2") is True
     assert registry.prefers_websockets("gpt-5.1") is False
 
 
@@ -190,3 +201,12 @@ async def test_plan_models_reverse_index():
     assert snapshot is not None
     assert snapshot.plan_models["plus"] == frozenset({"a", "b"})
     assert snapshot.plan_models["pro"] == frozenset({"b", "c"})
+
+
+def test_bootstrap_models_present():
+    registry = ModelRegistry(ttl_seconds=60.0)
+    bootstrap = registry.get_models_with_fallback()
+    assert "gpt-5.5" in bootstrap
+    assert "gpt-5.4" in bootstrap
+    assert "gpt-5.2" in bootstrap
+    assert "gpt-5.3-codex" in bootstrap
