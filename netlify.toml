@@ -5,7 +5,6 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  VITE_API_BASE_URL = "https://api.utksh.in"
 
 [[redirects]]
   from = "/api/*"
