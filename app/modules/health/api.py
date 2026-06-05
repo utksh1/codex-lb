@@ -119,6 +119,14 @@ def _bridge_readiness_failure_detail(bridge_ring: BridgeRingInfo) -> str | None:
         return None
     if bridge_ring.is_member:
         return None
+    # On single-instance deployments (no explicit ring configured), tolerate
+    # brief heartbeat lag rather than failing the health check.  The heartbeat
+    # background task can stall under resource pressure on constrained hosts
+    # (e.g. Render free tier), causing the instance to momentarily appear
+    # non-member of its own ring.
+    instance_ring = getattr(settings, "http_responses_session_bridge_instance_ring", [])
+    if not instance_ring:
+        return None
     return "Service is not an active bridge ring member"
 
 
