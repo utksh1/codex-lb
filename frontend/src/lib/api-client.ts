@@ -13,6 +13,13 @@ type RequestOptions = {
 const JSON_CONTENT_TYPE = "application/json";
 const EMPTY_RESPONSE_STATUS = new Set([204, 205]);
 
+/**
+ * Base URL for API calls. When set, all relative API paths (e.g. `/api/...`)
+ * are prefixed with this URL to bypass Netlify proxy and call the backend
+ * directly, saving ~500ms per request.
+ */
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -142,12 +149,13 @@ async function request<T>(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    const resolvedUrl = API_BASE_URL && url.startsWith("/") ? `${API_BASE_URL}${url}` : url;
+    response = await fetch(resolvedUrl, {
       method,
       body: requestBody.body,
       headers,
       signal: options?.signal,
-      credentials: options?.credentials ?? "same-origin",
+      credentials: options?.credentials ?? (API_BASE_URL ? "include" : "same-origin"),
     });
   } catch (error) {
     throw new ApiError({
