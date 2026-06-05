@@ -8,13 +8,13 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://codex-lb-backend.onrender.com/api/:splat"
+  to = "https://codex-lb-backend-sg.onrender.com/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/health/*"
-  to = "https://codex-lb-backend.onrender.com/health/:splat"
+  to = "https://codex-lb-backend-sg.onrender.com/health/:splat"
   status = 200
   force = true
 
