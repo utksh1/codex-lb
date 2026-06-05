@@ -43,6 +43,23 @@ export function AccountsPage() {
     setSearchParams(nextSearchParams);
   }, [searchParams, setSearchParams]);
 
+  const handleExport = useCallback(() => {
+    const exportData = accounts.map((account) => ({
+      accountId: account.accountId,
+      email: account.email,
+      displayName: account.displayName,
+      planType: account.planType,
+      status: account.status,
+    }));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `codex-lb-accounts-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [accounts]);
+
   const resolvedSelectedAccountId = useMemo(() => {
     if (accounts.length === 0) {
       return null;
@@ -96,6 +113,7 @@ export function AccountsPage() {
               onSelect={handleSelectAccount}
               onOpenImport={() => importDialog.show()}
               onOpenOauth={() => oauthDialog.show()}
+              onExport={handleExport}
             />
           </div>
 

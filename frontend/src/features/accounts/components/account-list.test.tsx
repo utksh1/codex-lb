@@ -33,6 +33,7 @@ describe("AccountList", () => {
         onSelect={onSelect}
         onOpenImport={() => {}}
         onOpenOauth={() => {}}
+        onExport={() => {}}
       />,
     );
 
@@ -66,6 +67,7 @@ describe("AccountList", () => {
         onSelect={() => {}}
         onOpenImport={() => {}}
         onOpenOauth={() => {}}
+        onExport={() => {}}
       />,
     );
 
@@ -106,6 +108,7 @@ describe("AccountList", () => {
         onSelect={() => {}}
         onOpenImport={() => {}}
         onOpenOauth={() => {}}
+        onExport={() => {}}
       />,
     );
 
