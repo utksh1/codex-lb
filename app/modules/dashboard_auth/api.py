@@ -476,12 +476,28 @@ async def logout_dashboard(
 
 
 def _set_session_cookie(response: JSONResponse, session_id: str, request: Request) -> None:
+    origin = request.headers.get("origin", "")
+    is_cross_origin = bool(origin) and origin.rstrip("/") != str(request.base_url).rstrip("/")
+
+    # When the frontend is on a different subdomain (e.g. codex.utksh.in → api.utksh.in),
+    # the cookie needs SameSite=None so the browser sends it on cross-origin fetch calls.
+    # We also set the domain to the shared parent so both subdomains can access it.
+    samesite: str = "none" if is_cross_origin else "lax"
+    domain: str | None = None
+    if is_cross_origin:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        host_parts = (parsed.hostname or "").split(".")
+        if len(host_parts) >= 2:
+            domain = "." + ".".join(host_parts[-2:])
+
     response.set_cookie(
         key=DASHBOARD_SESSION_COOKIE,
         value=session_id,
         httponly=True,
         secure=request.url.scheme == "https",
-        samesite="lax",
+        samesite=samesite,
         max_age=12 * 60 * 60,
         path="/",
+        domain=domain,
     )
