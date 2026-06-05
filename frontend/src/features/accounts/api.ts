@@ -2,6 +2,7 @@ import { del, get, post } from "@/lib/api-client";
 
 import {
   AccountActionResponseSchema,
+  AccountExportResponseSchema,
   AccountImportResponseSchema,
   AccountsResponseSchema,
   AccountTrendsResponseSchema,
@@ -28,6 +29,10 @@ export function importAccount(file: File) {
   return post(`${ACCOUNTS_BASE_PATH}/import`, AccountImportResponseSchema, {
     body: formData,
   });
+}
+
+export function exportAccounts() {
+  return get(`${ACCOUNTS_BASE_PATH}/export`, AccountExportResponseSchema);
 }
 
 export function pauseAccount(accountId: string) {

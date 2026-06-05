@@ -81,6 +81,22 @@ export const AccountImportResponseSchema = z.object({
   status: z.string(),
 });
 
+export const AccountExportTokensSchema = z.object({
+  idToken: z.string(),
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  accountId: z.string().nullable().optional(),
+});
+
+export const AccountExportEntrySchema = z.object({
+  tokens: AccountExportTokensSchema,
+  lastRefreshAt: z.string().datetime({ offset: true }).nullable().optional(),
+});
+
+export const AccountExportResponseSchema = z.object({
+  accounts: z.array(AccountExportEntrySchema),
+});
+
 export const AccountActionResponseSchema = z.object({
   status: z.string(),
 });

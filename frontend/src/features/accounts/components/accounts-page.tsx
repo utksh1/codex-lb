@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useMemo } from "react";
+import { Suspense, lazy, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -11,6 +11,7 @@ import { AccountsSkeleton } from "@/features/accounts/components/accounts-skelet
 import { ImportDialog } from "@/features/accounts/components/import-dialog";
 import { useAccounts } from "@/features/accounts/hooks/use-accounts";
 import { useOauth } from "@/features/accounts/hooks/use-oauth";
+import { exportAccounts } from "@/features/accounts/api";
 import { buildDuplicateAccountIdSet } from "@/utils/account-identifiers";
 import { getErrorMessageOrNull } from "@/utils/errors";
 
@@ -43,22 +44,27 @@ export function AccountsPage() {
     setSearchParams(nextSearchParams);
   }, [searchParams, setSearchParams]);
 
-  const handleExport = useCallback(() => {
-    const exportData = accounts.map((account) => ({
-      accountId: account.accountId,
-      email: account.email,
-      displayName: account.displayName,
-      planType: account.planType,
-      status: account.status,
-    }));
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `codex-lb-accounts-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [accounts]);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExport = useCallback(async () => {
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      const result = await exportAccounts();
+      const blob = new Blob([JSON.stringify(result.accounts, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `codex-lb-accounts-export-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Export failed");
+    } finally {
+      setExportBusy(false);
+    }
+  }, []);
 
   const resolvedSelectedAccountId = useMemo(() => {
     if (accounts.length === 0) {
@@ -82,13 +88,15 @@ export function AccountsPage() {
     importMutation.isPending ||
     pauseMutation.isPending ||
     resumeMutation.isPending ||
-    deleteMutation.isPending;
+    deleteMutation.isPending ||
+    exportBusy;
 
   const mutationError =
     getErrorMessageOrNull(importMutation.error) ||
     getErrorMessageOrNull(pauseMutation.error) ||
     getErrorMessageOrNull(resumeMutation.error) ||
-    getErrorMessageOrNull(deleteMutation.error);
+    getErrorMessageOrNull(deleteMutation.error) ||
+    exportError;
 
   return (
     <div className="animate-fade-in-up space-y-6">

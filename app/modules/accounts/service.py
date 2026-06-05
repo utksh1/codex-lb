@@ -24,6 +24,8 @@ from app.modules.accounts.repository import AccountsRepository
 from app.modules.accounts.schemas import (
     AccountAdditionalQuota,
     AccountAdditionalWindow,
+    AccountExportEntry,
+    AccountExportTokens,
     AccountImportResponse,
     AccountRequestUsage,
     AccountSummary,
@@ -54,6 +56,22 @@ class AccountsService:
         self._additional_usage_repo = additional_usage_repo
         self._usage_updater = UsageUpdater(usage_repo, repo, additional_usage_repo) if usage_repo else None
         self._encryptor = TokenEncryptor()
+
+    async def export_accounts(self) -> list[AccountExportEntry]:
+        accounts = await self._repo.list_accounts()
+        entries: list[AccountExportEntry] = []
+        for account in accounts:
+            tokens = AccountExportTokens(
+                id_token=self._encryptor.decrypt(account.id_token_encrypted),
+                access_token=self._encryptor.decrypt(account.access_token_encrypted),
+                refresh_token=self._encryptor.decrypt(account.refresh_token_encrypted),
+                account_id=account.chatgpt_account_id,
+            )
+            entries.append(AccountExportEntry(
+                tokens=tokens,
+                last_refresh_at=account.last_refresh,
+            ))
+        return entries
 
     async def list_accounts(self) -> list[AccountSummary]:
         accounts = await self._repo.list_accounts()

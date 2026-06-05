@@ -9,6 +9,7 @@ from app.dependencies import AccountsContext, get_accounts_context
 from app.modules.accounts.repository import AccountIdentityConflictError
 from app.modules.accounts.schemas import (
     AccountDeleteResponse,
+    AccountExportResponse,
     AccountImportResponse,
     AccountPauseResponse,
     AccountReactivateResponse,
@@ -30,6 +31,14 @@ async def list_accounts(
 ) -> AccountsResponse:
     accounts = await context.service.list_accounts()
     return AccountsResponse(accounts=accounts)
+
+
+@router.get("/export", response_model=AccountExportResponse)
+async def export_accounts(
+    context: AccountsContext = Depends(get_accounts_context),
+) -> AccountExportResponse:
+    entries = await context.service.export_accounts()
+    return AccountExportResponse(accounts=entries)
 
 
 @router.get("/{account_id}/trends", response_model=AccountTrendsResponse)

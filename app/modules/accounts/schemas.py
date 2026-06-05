@@ -105,3 +105,20 @@ class AccountTrendsResponse(DashboardModel):
     account_id: str
     primary: list[UsageTrendPoint] = Field(default_factory=list)
     secondary: list[UsageTrendPoint] = Field(default_factory=list)
+
+
+class AccountExportTokens(DashboardModel):
+    id_token: str
+    access_token: str
+    refresh_token: str
+    account_id: str | None = None
+
+
+class AccountExportEntry(DashboardModel):
+    tokens: AccountExportTokens
+    last_refresh_at: datetime | None = None
+
+
+class AccountExportResponse(DashboardModel):
+    accounts: list[AccountExportEntry] = Field(default_factory=list)
+
